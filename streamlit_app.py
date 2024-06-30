@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import altair as alt
+#import altair as alt
 import subprocess
 import os
 from player_percentiles import percentile_plot, highlight_value
@@ -9,6 +9,7 @@ from image_extraction import clear_directory, image_extraction, find_first_valid
 from player_comparison import forward_vs_mean, midfielder_vs_mean, defender_vs_mean
 from player_comparison import compare_attackers, compare_midfielders, compare_defenders
 from player_recomendation import *
+from player_report_llm import llm_call_up
 import re
 
 #@st.cache_data    Nada más se enciende la pagina descargar (demasiado tiempo)
@@ -59,6 +60,7 @@ with col2:
 if player and st.session_state.selected_mode:
         # Check player position
         position = (players[players['player']==player])['position'].values[0]
+        age =  (players[players['player']==player])['age'].values[0]
         if position not in ['DF', 'MF', 'FW']:
             pos1, pos2 = position.split(',')
             st.write(f"Player {player} can be compared to two positions: {pos1} and {pos2}")
@@ -141,7 +143,7 @@ if player and st.session_state.selected_mode:
         
         
         st.table(sim_df)
-
+        
         sim_table= make_plottable_table(similar_players)
         st.pyplot(sim_table)
         
@@ -160,10 +162,15 @@ if player and st.session_state.selected_mode:
                 elif selected_position == 'DF':
                     compare_defenders(player,sim_play,min_threshold_mean)
                     st.image("b.png",width=500)
+
+        #### Player Report
+        st.title('Player Report')
+
         #image_extraction(player)
         #pth = find_first_valid_image("images")
         #st.image(pth, width=200)
-
+        report = llm_call_up(player,age,team,selected_position,results)
+        st.write(report)
 
 
 

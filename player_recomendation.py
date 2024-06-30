@@ -203,7 +203,9 @@ def recommend_similar_players(dataset,player_name,team,n=5):
 def preprocess_df(dataset,pos):
   for column in dataset.columns:
     if column != 'player':
+        
         dataset[column] = dataset[column].round(2)
+
   if pos == "FW":
     new_column_names = {
       'goals_per90': 'G',
