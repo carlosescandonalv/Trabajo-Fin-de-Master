@@ -4,12 +4,15 @@ import pandas as pd
 #import altair as alt
 import subprocess
 import os
+from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_option_menu import option_menu
 from player_percentiles import percentile_plot, highlight_value
 from image_extraction import clear_directory, image_extraction, find_first_valid_image
 from player_comparison import forward_vs_mean, midfielder_vs_mean, defender_vs_mean
 from player_comparison import compare_attackers, compare_midfielders, compare_defenders
 from player_recomendation import *
 from player_report_llm import llm_call_up
+from player_rating import generate_df, get_rating
 import re
 
 #@st.cache_data    Nada más se enciende la pagina descargar (demasiado tiempo)
@@ -19,13 +22,17 @@ import re
 #    subprocess.run(['python', script_path], check=True)
 
 
-st.set_page_config(page_title='xLaFrontal App', page_icon='📊')
 st.title('Player Analysis')
+
 
 def load_data():
     csv_path = os.path.join('data', 'Big5Leagues_Players_Standard_Stats.csv')
     df = pd.read_csv(csv_path)
     return df
+
+
+with open('style/style.css') as f:
+    st.markdown(f'<style>{f.read()}</style>',unsafe_allow_html=True)
 
 # Find Players
 players = load_data()
@@ -56,10 +63,33 @@ with col2:
     if st.button('Big7', key='Big7', help='Compare with Big7 Leagues players', args=('Ligue')):
         select_mode("Big5") 
 
+add_vertical_space(2)
+
 # Comprueba que se introduce nombre y el modo de la sesión
 if player and st.session_state.selected_mode:
+        col1,col2,col3 = st.columns([0.4,0.4,0.2],gap="small")
+        with col1:
+            image_extraction(player)
+            pth = find_first_valid_image("images")
+            st.image(pth, width=200)
+        # Rating extraction
+        with col2: 
+            st.subheader(f"{player}",divider="gray")
+            position = (players[players['player']==player])['position'].values[0]
+            print(position)
+            st.write(f"Position: {position}")
+            nationality = (players[players['player']==player])['nationality'].values[0]
+            st.write(f"Nationality: {nationality}")
+            
+            st.write(f"Team: {team}")
+        with col3: 
+            performance = generate_df()
+            rating = float(get_rating(performance,player,team))
+            rating = min(round(rating, 2), 10)
+            st.metric("Rating",rating)
+        
+        
         # Check player position
-        position = (players[players['player']==player])['position'].values[0]
         age =  (players[players['player']==player])['age'].values[0]
         if position not in ['DF', 'MF', 'FW']:
             pos1, pos2 = position.split(',')
@@ -67,6 +97,7 @@ if player and st.session_state.selected_mode:
             selected_position = st.selectbox("Select the position", [pos1, pos2])
         else:
             selected_position = position
+        
         fig, results = percentile_plot(player,st.session_state.selected_mode,team,selected_position)
         
         # Dataframe a la izq e imagen a la derecha
@@ -126,7 +157,7 @@ if player and st.session_state.selected_mode:
 
 
         #### Player Recommender
-        st.title('Player recommender')
+        st.title('Player Recommender')
         test_df = create_test_df(player,selected_position,team,st.session_state.selected_mode)
         test_df.fillna(0,inplace=True)
 
@@ -166,10 +197,22 @@ if player and st.session_state.selected_mode:
         #### Player Report
         st.title('Player Report')
 
-        #image_extraction(player)
-        #pth = find_first_valid_image("images")
-        #st.image(pth, width=200)
-        report = llm_call_up(player,age,team,selected_position,results)
+        image_extraction(player)
+        pth = find_first_valid_image("images")
+        st.image(pth, width=200)
+
+        if selected_position == "FW":
+            position = "Forward"
+        elif selected_position =="MF":
+            position = "Midfielder"
+        elif selected_position =="DF":
+            position = "Defender"
+
+        if st.session_state.selected_mode == "Liga":
+            modo = "against same League"
+        elif st.session_state.selected_mode == "Big5":
+            modo = "against European Big 5 Leagues"
+        report = llm_call_up(player,age,team,position,modo,results)
         st.write(report)
 
 
