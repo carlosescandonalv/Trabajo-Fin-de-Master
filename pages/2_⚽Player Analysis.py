@@ -69,7 +69,7 @@ add_vertical_space(2)
 if player and st.session_state.selected_mode:
         col1,col2,col3 = st.columns([0.4,0.4,0.2],gap="small")
         with col1:
-            image_extraction(player)
+            image_extraction(f' {player} {team}')
             pth = find_first_valid_image("images")
             st.image(pth, width=200)
         # Rating extraction
@@ -119,7 +119,7 @@ if player and st.session_state.selected_mode:
         passing = pd.read_csv("data/Big5Leagues_Players_passing_Stats.csv")
         col1.metric("Passing %",passing[passing['player'] == player]['passes_pct'].values[0])
         defense = pd.read_csv("data/Big5Leagues_Players_defense_Stats.csv")
-        col2.metric("Tackles %",defense[defense['player'] == player]['challenge_tackles_pct'].values[0])
+        col2.metric("Ground Duels %",defense[defense['player'] == player]['challenge_tackles_pct'].values[0])
         misc = pd.read_csv("data/Big5Leagues_Players_misc_Stats.csv")
         col3.metric("Aerial Duels %",misc[misc['player'] == player]['aerials_won_pct'].values[0])
         
