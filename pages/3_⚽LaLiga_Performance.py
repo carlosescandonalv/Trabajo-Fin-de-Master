@@ -6,10 +6,29 @@ from streamlit_extras.add_vertical_space import add_vertical_space
 st.set_page_config(page_title='La Liga Performance', page_icon=':soccer')
 
 st.title("Database Access")
+seasons = db.season_list()
+season = st.selectbox("Select Season",seasons)
+col1, col2 = st.columns([0.3,0.7])
+with col1:
+    table_df = db.table_extraction(season)
+    
+    table_ind = table_df.rename(columns={'team':'Team','matches_won': 'W', 'matches_drawn': 'D','matches_lost': 'L',
+                              'goals_scored': 'G','goals_received': 'GA',
+                              'points': 'Pts'})
+   
+    table_ind = table_ind.sort_values(by='Pts', ascending=False).reset_index(drop=True)
+    table_ind.index = table_ind.index + 1
 
-teams_list = db.team_list()
+    st.dataframe(table_ind.style.apply(db.color_rows, axis=1))
+with col2:
+    points_dev = db.table_plot(table_df)
+    st.plotly_chart(points_dev)
+
+
+teams_list = db.team_list(season)
+
 teams_list.insert(0,"")
-team = st.selectbox("Search a player", teams_list)
+team = st.selectbox("Search a team", teams_list)
 
 add_vertical_space(2)
 
@@ -20,7 +39,7 @@ if team:
         st.image(team_img)
     with col2:
         st.header(team)
-        df = db.get_team_event_xi(team)
+        df = db.get_team_event_xi(team,season)
         xi_df, full_squad = db.get_xi(df)
         full_squad.rename(columns={'player_name':'Name','player_number': 'ShirtN', 'total_minutes_played': 'Minutes'}, inplace=True)
         full_squad.set_index('Name', inplace=True)
@@ -43,7 +62,7 @@ if team:
 
     # Section passes and goals development
     col1,col2,col3,col4 =st.columns([0.3,0.2,0.2,0.3],vertical_alignment='center')
-    goals_fig,goals_scored,goals_conceded = db.goals_development(team)
+    goals_fig,goals_scored,goals_conceded = db.goals_development(team,season)
 
     with col2:
         st.metric("Goals scored",goals_scored)
@@ -54,5 +73,9 @@ if team:
 
 
 
-    points_fig = db.pass_development(team)
+    points_fig = db.pass_development(team,season)
     st.plotly_chart(points_fig)
+
+    player_names = db.search_players(team,season)
+    player_names.insert(0,"")
+    player = st.selectbox(f"Select a player from {team}",player_names)

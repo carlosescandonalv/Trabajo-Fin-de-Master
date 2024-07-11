@@ -15,7 +15,8 @@ from PIL import Image
 from mplsoccer import VerticalPitch, add_image, FontManager
 import os
 import plotly.graph_objects as go
-
+import plotly.express as px
+import json 
 def create_connection():
     conn = psycopg2.connect(
             user = "postgres.ztcwzgcdqaecducpznat",
@@ -26,24 +27,108 @@ def create_connection():
         )
     return conn
 
-def team_list():
+def season_list():
     conn = create_connection() 
     cursor = conn.cursor()
     cursor.execute("""
-       SELECT name FROM teams
+       SELECT season_id FROM season
         """)
     records = cursor.fetchall()
-    team_names = [team[0] for team in records]
-    return team_names
+    seasons = [season[0] for season in records]
+    return seasons
+
+def team_list(season):    # Create a list with all the teams avilable
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT participants FROM season
+        WHERE season_id = '{season}'
+        """)
+    records = cursor.fetchall()
+    teamslist = json.loads(records[0][0])
+    if "Atletico Madrid" in teamslist:
+        teamslist[teamslist.index("Atletico Madrid")] = "Atletico"
+    return teamslist
+
+def table_extraction(season):    # Classification Dataframe extraction (W,D,L, Points)
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT * FROM matches WHERE season = '{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    team_stats = {}
+    def initialize_team(team_name):
+        return {
+            'matches_won': 0,
+            'matches_drawn': 0,
+            'matches_lost': 0,
+            'goals_scored': 0,
+            'goals_received': 0
+        }
+    # Update the team statistics based on match outcomes
+    for index, row in df.iterrows():
+        home_team = row['home']
+        away_team = row['away']
+        goals_h = row['goals_h']
+        goals_a = row['goals_a']
+        
+        if home_team not in team_stats:
+            team_stats[home_team] = initialize_team(home_team)
+        if away_team not in team_stats:
+            team_stats[away_team] = initialize_team(away_team)
+        
+        team_stats[home_team]['goals_scored'] += goals_h
+        team_stats[home_team]['goals_received'] += goals_a
+        team_stats[away_team]['goals_scored'] += goals_a
+        team_stats[away_team]['goals_received'] += goals_h
+        
+        if goals_h > goals_a:
+            team_stats[home_team]['matches_won'] += 1
+            team_stats[away_team]['matches_lost'] += 1
+        elif goals_h < goals_a:
+            team_stats[away_team]['matches_won'] += 1
+            team_stats[home_team]['matches_lost'] += 1
+        else:
+            team_stats[home_team]['matches_drawn'] += 1
+            team_stats[away_team]['matches_drawn'] += 1
+
+    # Convert the team_stats dictionary to a DataFrame
+    team_stats_df = pd.DataFrame.from_dict(team_stats, orient='index')
+
+    team_stats_df['points'] = team_stats_df['matches_won']*3+team_stats_df['matches_drawn']
+    team_stats_df = team_stats_df.sort_values(by='points', ascending=True)
+    team_stats_df = team_stats_df.reset_index().rename(columns={'index': 'team'})
+
+    return team_stats_df
+
+def table_plot(df):
+    fig = px.bar(df, x='team', y='points', title='Points of Each Team', 
+                labels={'team': 'Teams', 'points': 'Points'}, 
+                color='points', 
+                color_continuous_scale='Blues')
+
+    fig.update_layout(xaxis_tickangle=-45)
+    return fig
+ 
+def color_rows(row):    # Color the rows of the team classification table
+    if row.name < 5:
+        return ['background-color: #9CFC97']*len(row) 
+    elif row.name < 7:
+        return ['background-color: #5BC0EB']*len(row)
+    elif row.name >17:
+        return ['background-color: #D37773']*len(row)
 
 
-def goals_development(team):
+
+def goals_development(team,season):   # Goals development plot for a spcefic team
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute(f"""
        SELECT * from matches
        WHERE matches.home = '{team}' OR matches.away = '{team}'
-             
+       AND matches.season = '{season}'      
         """)
     records = cursor.fetchall()
     df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
@@ -119,7 +204,7 @@ def determine_outcome(row, variable_team):
         else:
             return 'N/A'  #
         
-def pass_development(team):
+def pass_development(team,season):
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute(f"""
@@ -128,7 +213,7 @@ def pass_development(team):
        FROM match_event
        JOIN teams ON match_event.team_id = teams.team_id
        JOIN matches ON match_event.match_id = matches.match_id
-       WHERE teams.name = '{team}' AND type = 'Pass'
+       WHERE teams.name = '{team}' AND type = 'Pass'AND matches.season = '{season}'
         """)
     records = cursor.fetchall()
     
@@ -178,7 +263,7 @@ def pass_development(team):
 def get_team_info(team):
   team_data = [
     {'Team': 'Deportivo Alaves', 'Crest': 'Alaves.png', 'Color': '#0761AF', 'Color2':'white'},
-    {'Team': 'Almeria', 'Crest': 'Almeria.png', 'Color': '#ee1119','Color2':'white'},
+    {'Team': 'Almeria', 'Crest': 'Almería.png', 'Color': '#ee1119','Color2':'white'},
     {'Team': 'Athletic Club', 'Crest': 'Athletic.png', 'Color': '#EE2523','Color2':'white'},
     {'Team': 'Atletico', 'Crest': 'atletico.png', 'Color': '#CB3524','Color2':'white'},
     {'Team': 'Barcelona', 'Crest': 'Barcelona.png', 'Color': '#A50044','Color2':'#EDBB00'},
@@ -208,15 +293,16 @@ def get_team_info(team):
   color2= next((item['Color2'] for item in team_data if item['Team'] == team), None)
   return crest_img,color1,color2
 
-def get_team_event_xi(team):
+def get_team_event_xi(team,season):
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute(f"""
-       SELECT match_event.*, players.name AS player_name, players.shirt_no AS number,teams.name AS team_name FROM match_event
+       SELECT match_event.*, matches.season AS season, players.name AS player_name, players.shirt_no AS number,
+                   teams.name AS team_name FROM match_event
         JOIN players ON match_event.player_id = players.player_id
         JOIN teams ON match_event.team_id = teams.team_id
         JOIN matches ON match_event.match_id = matches.match_id
-        WHERE teams.name = '{team}'
+        WHERE teams.name = '{team}' AND matches.season = '{season}'
         """)
     records = cursor.fetchall()
     df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
@@ -297,3 +383,22 @@ def draw_initial_xi(xi_df,team,c1,c2):
     plt.title(f'{team} most frequent XI',loc='center', fontweight='bold',color='white')
 
     return fig
+
+
+
+##### PLAYERS INFO
+
+
+def search_players(team,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT DISTINCT players.name FROM match_event
+    JOIN players ON match_event.player_id = players.player_id
+    JOIN matches ON match_event.match_id = matches.match_id
+    JOIN teams ON match_event.team_id = teams.team_id
+    WHERE teams.name = '{team}' AND matches.season = '{season}'
+    """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    return df['name'].to_list()
