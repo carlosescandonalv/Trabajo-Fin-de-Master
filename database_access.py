@@ -384,11 +384,171 @@ def draw_initial_xi(xi_df,team,c1,c2):
 
     return fig
 
+##### MATCHES
+
+def match_info(home,away,season):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT match_event.*, players.name AS player_name, teams.name AS team_name
+    FROM match_event
+    JOIN matches ON match_event.match_id = matches.match_id
+    JOIN players ON match_event.player_id = players.player_id
+    JOIN teams ON match_event.team_id = teams.team_id
+    WHERE matches.home = '{home}' AND matches.away = '{away}'
+    AND matches.season = '{season}'
+    """)
+    records = cursor.fetchall()
+    xT = pd.read_csv("imgs_app/xT_Grid.csv")
+    xT = np.array(xT)
+    xT_rows, xT_cols = xT.shape
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df_pass = df.loc[(df['type']=="Pass") & (df['outcome']=='Successful')].reset_index()
+    df_pass['x1_bin'] = pd.cut(df_pass['x'], bins=xT_cols, labels=False)
+    df_pass['y1_bin'] = pd.cut(df_pass['y'], bins=xT_rows, labels=False)
+    df_pass['x2_bin'] = pd.cut(df_pass['end_x'], bins=xT_cols, labels=False)
+    df_pass['y2_bin'] = pd.cut(df_pass['end_y'], bins=xT_rows, labels=False)
+
+    df_pass['start_zone_value'] = df_pass[['x1_bin', 'y1_bin']].apply(lambda x: xT[x[1]][x[0]], axis=1)
+    df_pass['end_zone_value'] = df_pass[['x2_bin', 'y2_bin']].apply(lambda x: xT[x[1]][x[0]], axis=1)
+    df_pass['xT'] = df_pass['end_zone_value'] - df_pass['start_zone_value']
+    game_totals = df_pass.groupby('player_name').agg({'xT':['sum']})
+    game_totals.sort_values(by=('xT','sum'),ascending=False)
+    
+
+    pass_data_1 = df[df['team_name']==home].reset_index()
+    pass_data_2 = df[df['team_name']==away].reset_index()
+
+    return pass_data_1,pass_data_2,df_pass
+
+def pass_network(df,df_pass,team,opponent,minimum,color1,color2,team_img):
+  team = team
+  df['passer'] = df['player_name']
+  df['recipient'] = df['player_name'].shift(-1)
+
+  team_against = opponent
+  subs1 = df[df['team_name']==team]
+  subs1 = subs1[subs1['type']=='SubstitutionOff']
+  firstSub = subs1['minute']
+  firstSub=firstSub.min()
+  succesful = df[df['minute']<firstSub]
+  average_locations = succesful.groupby('passer').agg({'x':['mean'],'y':['mean','count']})
+
+  # x Threat summatory team (highest xT of the whole match)
+  x_threat = df_pass[df_pass['team_name']==team]
+  x_threat = x_threat.groupby('player_name').agg({'xT':['sum']})
+  x_threat.columns=['sum']
+  x_threat = x_threat.sort_values(by='sum',ascending=False)
+  highest_xT = x_threat.iloc[0]
+
+  highest_xT_name = highest_xT.name
+  highest_xT_value = round(highest_xT['sum'],2)
+
+  average_locations.columns=['x','y','count']
+  average_locations = average_locations.sort_values(by='count', ascending=False)
+
+
+  # Calculate highest nº of passes of the match
+  passer_df =  df.groupby('passer').agg({'x':['mean'],'y':['mean','count']})
+  passer_df.columns=['x','y','count']
+
+  passer_df = passer_df.sort_values(by='count', ascending=False)
+
+  highest_passer = passer_df.iloc[0]
+  highest_passer_name = highest_passer.name
+  highest_passer_passes = int(highest_passer['count'])
+
+  # Pass between calculation
+  pass_between = succesful.groupby(['passer','recipient']).id.count().reset_index()
+  pass_between.rename({'id':'pass_count'},axis='columns',inplace=True)
+
+  pass_between = pass_between.merge(average_locations, left_on='passer',right_index=True)
+  pass_between = pass_between.merge(average_locations, left_on='recipient',right_index=True,suffixes=['','_end'])
+
+  pass_between = pass_between[pass_between['pass_count']>minimum]
+
+
+  # Plot the pitch
+  pitch = VerticalPitch(pitch_color='#1B2632', line_color='#EEE9DF', pitch_type='opta',linewidth=0.5,goal_type='box')
+  fig, ax = pitch.draw(figsize=(12, 6))
+  fig.set_facecolor('#1B2632')
+  ax.set_facecolor('#1B2632')
+  pitch.annotate(f"0-{firstSub} \'", xy=(96,50), c='white',zorder=2,
+                    va='center', ha='center', size=10,ax=ax)
+
+  arrows = pitch.arrows(pass_between.x,pass_between.y,pass_between.x_end,pass_between.y_end,
+                        ax=ax, lw=3,
+                        width=3,headwidth=3,headlength=4,
+                        color='#B2FFA9',zorder=1,alpha=(pass_between.pass_count / pass_between.pass_count.max()))
+
+  x_threat = df_pass[(df_pass['team_name']==team) & (df_pass['minute']<firstSub)]
+  x_threat = x_threat.groupby('player_name').agg({'xT':['sum']})
+  x_threat.columns=['sum']
+
+  average_locations = average_locations.merge(x_threat, left_on='passer', right_index=True)
+
+  nodes = pitch.scatter(average_locations.x,average_locations.y,
+                        ax=ax,
+                        s=200+(800*average_locations['sum']), color=color1,edgecolors=color2,linewidth=1,zorder=1)
+
+  plt.text(-42, 67,f'{highest_passer_name}', fontsize=14, ha='center', va='center',color='white',fontfamily="Liberation Sans Narrow")
+  plt.text(-15, 72,f'HIGHEST Nº OF PASSES: ', fontsize=14, ha='left', va='center',color='white',fontfamily="Liberation Sans Narrow",fontweight='bold')
+  plt.text(-42, 50,f'{highest_xT_name} ({highest_xT_value})', fontsize=14, ha='center', va='center',color='white',fontproperties="Liberation Sans Narrow")
+  plt.text(-15, 55,f'HIGHEST xT (via pass):', fontsize=14, ha='left', va='center',color='white',fontfamily="Liberation Sans Narrow",fontweight='bold')
+
+  ax.set_xlim(105, -60)
+
+  mSize = [0.05,0.20,0.6,0.8]
+  mSizeS = [700 * i for i in mSize]
+  mx = [-28,-33,-41,-51]
+  my = [35,35,35,35]
+
+  # Plot circles (xT) and arrow
+  plt.scatter(mx, my, s=mSizeS, facecolors=color1, edgecolor=color2)
+  arrow_x = -25  # X-coordinate for the arrow
+  arrow_y = 30  # Y-coordinate for the arrow
+  arrow = mpl.patches.FancyArrowPatch((arrow_x, arrow_y), (arrow_x-34, arrow_y), color='white',arrowstyle='-|>', mutation_scale=12, lw=1)
+  plt.text(-38, 28, 'xT', va='center', fontfamily="Liberation Sans Narrow", fontsize=12,fontweight='bold',color='white')
+  ax.add_patch(arrow)
+
+  # Plot arrows intensity
+  arrow = mpl.patches.FancyArrowPatch((-29, 15), (-38, 24), color='#B2FFA9',arrowstyle='-|>', mutation_scale=12, lw=4,alpha=0.2)
+  ax.add_patch(arrow)
+  arrow = mpl.patches.FancyArrowPatch((-38, 15), (-47, 24), color='#B2FFA9',arrowstyle='-|>', mutation_scale=12, lw=4,alpha=0.6)
+  ax.add_patch(arrow)
+  arrow = mpl.patches.FancyArrowPatch((-47, 15), (-56, 24), color='#B2FFA9',arrowstyle='-|>', mutation_scale=12, lw=4,alpha=1)
+  ax.add_patch(arrow)
+
+  arrow = mpl.patches.FancyArrowPatch((-25, 12), (-59, 12), color='white',arrowstyle='-|>', mutation_scale=12, lw=1,alpha=1)
+  plt.text(-28, 10, 'Nº of passes', va='center', fontfamily="Liberation Sans Narrow", fontsize=12,fontweight='bold',color='white')
+  ax.add_patch(arrow)
+
+  # plot title
+  plt.title(f'Pass network {team} against {team_against}',loc='center', fontweight='bold',color='white')
+  plt.text(78, -5,f'*minimum 5 passes to be included', fontsize=12, ha='left', va='center',color='white',fontfamily="Liberation Sans Narrow")
+  average_locations.reset_index(inplace=True)
+
+  # Plot images
+  ax3 = add_image(team_img, fig, left=0.64, bottom=0.75, width=0.075, interpolation='hanning')
+
+  # plot player names
+  for index, row in average_locations.iterrows():
+    words = row.passer.split()
+    if len(words)>1:
+        first_letters = ''.join(word[0] for word in words[:-1])
+        row.passer= f"{first_letters}.{words[-1]}"
+    if row.x > np.mean(average_locations['x']):
+     pitch.annotate(row.passer, xy=(row.x+4,row.y), c='#EEE9DF',zorder=4,
+                    va='center', ha='center', size=9,ax=ax, fontweight= 'bold')
+    else:
+     pitch.annotate(row.passer, xy=(row.x-4,row.y), c='#EEE9DF',zorder=4,
+                    va='center', ha='center', size=9,ax=ax, fontweight= 'bold')
+
+  return fig
+
 
 
 ##### PLAYERS INFO
-
-
 def search_players(team,season):
     conn = create_connection() 
     cursor = conn.cursor()

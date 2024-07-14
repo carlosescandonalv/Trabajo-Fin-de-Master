@@ -24,7 +24,34 @@ with col2:
     points_dev = db.table_plot(table_df)
     st.plotly_chart(points_dev)
 
+# Matches
+st.subheader("Match overview")
+col1, col2 = st.columns([0.5,0.5])
+teams = db.team_list(season)
+teams.insert(0,"")
+with col1: 
+    home = st.selectbox("Select Home Team",teams)
+    
+with col2: 
+    away = st.selectbox("Select Away Team",teams)
+    
+if home and away:
+    if home == away:
+        st.write("Home and Away team can't be equal")    
+    else:
+        home_img,h1,h2 = db.get_team_info(home)
+        away_img,a1,a2 = db.get_team_info(away)
+        pass_data_home, pass_data_away,df_pass = db.match_info(home,away,season)
+        col1, col2 = st.columns([0.5,0.5])
+        with col1: 
+            match_network = db.pass_network(pass_data_home,df_pass,home,away,5,h1,h2,home_img)
+            st.pyplot(match_network)
+        with col2: 
+            match_network = db.pass_network(pass_data_away,df_pass,away,home,5,a1,a2,away_img)
+            st.pyplot(match_network)
 
+
+st.subheader("Team overview")
 teams_list = db.team_list(season)
 
 teams_list.insert(0,"")
@@ -76,6 +103,7 @@ if team:
     points_fig = db.pass_development(team,season)
     st.plotly_chart(points_fig)
 
+    st.subheader("Player overview")
     player_names = db.search_players(team,season)
     player_names.insert(0,"")
     player = st.selectbox(f"Select a player from {team}",player_names)
