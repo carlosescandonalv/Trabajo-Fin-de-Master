@@ -117,11 +117,11 @@ if player and st.session_state.selected_mode:
 
         col1,col2,col3,col4 = st.columns(4)
         passing = pd.read_csv("data/Big5Leagues_Players_passing_Stats.csv")
-        col1.metric("Passing %",passing[passing['player'] == player]['passes_pct'].values[0])
+        col1.metric("Passing %",passing[(passing['player'] == player) & (passing['team'] == team)]['passes_pct'].values[0])
         defense = pd.read_csv("data/Big5Leagues_Players_defense_Stats.csv")
-        col2.metric("Ground Duels %",defense[defense['player'] == player]['challenge_tackles_pct'].values[0])
+        col2.metric("Ground Duels %",defense[(defense['player'] == player)& (defense['team'] == team)]['challenge_tackles_pct'].values[0])
         misc = pd.read_csv("data/Big5Leagues_Players_misc_Stats.csv")
-        col3.metric("Aerial Duels %",misc[misc['player'] == player]['aerials_won_pct'].values[0])
+        col3.metric("Aerial Duels %",misc[(misc['player'] == player)& (misc['team'] == team)]['aerials_won_pct'].values[0])
         
         st.title('Player Stat Comparison')
         

@@ -49,11 +49,11 @@ def forward_vs_mean(player,modo,team,match_th):
     color0 = '#6CABDD'
     color1= '#00F0B5'
     std_data0 = std[(std['player'] == player) & (std['team'] == team)]
-    shoot_data0 = shoot[shoot['player'] == player]
-    gca_data0 = gca[gca['player'] == player]
-    pass_data0 = passing[passing['player'] == player]
-    possession_data0 = possession[possession['player'] == player]
-    miscellaneous_data0 = miscellaneous[miscellaneous['player'] == player]
+    shoot_data0 = shoot[(shoot['player'] == player) & (shoot['team'] == team)] 
+    gca_data0 = gca[(gca['player'] == player) & (gca['team'] == team)]
+    pass_data0 = passing[(passing['player'] == player) & (gca['team'] == team)]
+    possession_data0 = possession[(possession['player'] == player )& (possession['team'] == team)]
+    miscellaneous_data0 = miscellaneous[(miscellaneous['player'] == player) & (miscellaneous['team'] == team)]
 
     age = std_data0["age"].values[0]
     minutes_played0 = std_data0["minutes"].values[0]
@@ -62,8 +62,8 @@ def forward_vs_mean(player,modo,team,match_th):
     # Define the radar pie chart categories and values
     categories = ['Goals per90','XG per90','Assists per90','XA per90','Shots',
                 'Shots on goal','Goals/shot on goal','SCA','GCA',
-                'Pass %','Key passes','Progressive carries','Takeons','Aerial duel wons%',
-                'Offsides']
+                'Pass %','Key passes','Progressive carries','Takeons',
+                'Aerial duel%','Offsides']
 
 
     values = [
@@ -195,12 +195,12 @@ def midfielder_vs_mean(player,modo,team,match_th):
     color0 = '#6CABDD'
     color1= '#00F0B5'
     std_data0 = std[(std['player'] == player) & (std['team'] == team)]
-    shoot_data0 = shoot[shoot['player'] == player]
-    gca_data0 = gca[gca['player'] == player]
-    pass_data0 = passing[passing['player'] == player]
-    defense_data0 =  defense[defense['player'] == player]
-    possession_data0 = possession[possession['player'] == player]
-    miscellaneous_data0 = miscellaneous[miscellaneous['player'] == player]
+    shoot_data0 = shoot[(shoot['player'] == player) & (shoot['team'] == team)]
+    gca_data0 = gca[(gca['player'] == player) & (gca['team'] == team)]
+    pass_data0 = passing[(passing['player'] == player) & (passing['team'] == team)]
+    defense_data0 =  defense[(defense['player'] == player) & (defense['team'] == team)]
+    possession_data0 = possession[(possession['player'] == player) & (possession['team'] == team)]
+    miscellaneous_data0 = miscellaneous[(miscellaneous['player'] == player) & (miscellaneous['team'] == team)]
     
     
     age = std_data0["age"].values[0]
@@ -347,19 +347,19 @@ def defender_vs_mean(player,modo,team,match_th):
     color0 = '#6CABDD'
     color1= '#6DECAF'
     std_data0 = std[(std['player'] == player) & (std['team'] ==team)]
-    pass_data0 = passing[passing['player'] == player]
-    defense_data0 =  defense[defense['player'] == player]
-    possession_data0 = possession[possession['player'] == player]
-    miscellaneous_data0 = miscellaneous[miscellaneous['player'] == player]
+    pass_data0 = passing[(passing['player'] == player) & (passing['team'] == team)]
+    defense_data0 =  defense[(defense['player'] == player) & (defense['team'] == team)]
+    possession_data0 = possession[(possession['player'] == player) & (possession['team'] == team)]
+    miscellaneous_data0 = miscellaneous[(miscellaneous['player'] == player) & (miscellaneos['team'] == team)]
     
     age = std_data0["age"].values[0]
     minutes_played0 = std_data0["minutes"].values[0]
 
 
     # Define the radar pie chart categories and values
-    categories = ['Tackles Won','Tackles won %','Blocks','Interceptions','Aerial wins','Aerial win %','Ball recoveries',
-              'Fouls','Passes completed','Pass %','Key passes','Acc. Long balls','Long pass %','Progr. passes',
-              'Progr. carries']
+    categories = ['Tackles Won','Tackles won %','Blocks','Interceptions','Aerial wins',
+                  'Aerial win %','Ball recoveries','Fouls','Passes completed','Pass %',
+                  'Key passes','Acc. Long balls','Long pass %','Progr. passes','Progr. carries']
     
     values = [
         defense_data0['tackles_won_per90'].mean(),

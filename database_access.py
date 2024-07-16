@@ -17,6 +17,10 @@ import os
 import plotly.graph_objects as go
 import plotly.express as px
 import json 
+import seaborn as sns
+from matplotlib.colors import LinearSegmentedColormap
+
+
 def create_connection():
     conn = psycopg2.connect(
             user = "postgres.ztcwzgcdqaecducpznat",
@@ -562,3 +566,48 @@ def search_players(team,season):
     records = cursor.fetchall()
     df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
     return df['name'].to_list()
+
+
+def player_heatmap(player,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT * FROM match_event
+    JOIN players ON match_event.player_id = players.player_id
+    JOIN matches ON match_event.match_id = matches.match_id             
+    WHERE type = 'BallTouch' AND players.name = '{player}'
+    AND matches.season = '{season}'
+    """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    pitch = VerticalPitch(pitch_type='opta',half=False,
+            pitch_color='#1B2632',stripe=False,line_color='#EEE9DF',
+            goal_type='box',linewidth=0.5,line_zorder=2,corner_arcs=True)
+
+    fig, ax = pitch.draw(figsize=(10, 8))
+    # Create a custom color map that goes from yellow to red
+    colors = [(1, 1, 0), (1, 0, 0)]  # (R, G, B) values: yellow (1, 1, 0) to red (1, 0, 0)
+    cmap = LinearSegmentedColormap.from_list("YellowToRed", colors, N=256)
+
+    df.y = 100-df['y']
+    #Create the heatmap
+    kde = sns.kdeplot(df,
+                      x='y',
+                      y='x',
+                      fill = True,
+                      multiple = 'fill',
+                      thresh = 0.5,
+                      cmap= cmap,#turbo#magma
+                      alpha = 0.8,
+                      levels=800,
+                      common_norm=False,cut=4
+                      )
+
+    plt.arrow(105, 30,0 , 40, color='#EEE9DF', alpha=1.0,
+              zorder=1, head_width=3, head_length=3.5, linewidth=3, length_includes_head=True)
+    plt.xlim(-5,110)
+    plt.ylim(-10,110)
+    plt.title(f"{player} heatmap",size=20,y=0.95,fontweight='bold',color= '#EEE9DF',fontfamily="Liberation Sans Narrow")
+    fig.set_facecolor('#1B2632')
+
+    return fig

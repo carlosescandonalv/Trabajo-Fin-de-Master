@@ -107,3 +107,9 @@ if team:
     player_names = db.search_players(team,season)
     player_names.insert(0,"")
     player = st.selectbox(f"Select a player from {team}",player_names)
+    if player:
+        col1,col2 = st.columns([0.5,0.5])
+        with col1:
+            heatmap = db.player_heatmap(player,season)
+            st.pyplot(heatmap)
+        
