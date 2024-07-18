@@ -112,4 +112,22 @@ if team:
         with col1:
             heatmap = db.player_heatmap(player,season)
             st.pyplot(heatmap)
-        
+        with col2:
+            pass_zones = db.player_passing_zones(player,season)
+            st.pyplot(pass_zones)
+    st.divider()
+
+
+    
+    teams_list.remove(team)
+    rival = st.selectbox(f"Select a rival to plot {player} pass map:",teams_list)
+    mode = st.radio("Choose one: ",["Home","Away"])# Home or away
+    if rival and mode:
+        if mode == "Away": 
+            passmap = db.player_passmap(player,rival,team,mode,season)
+        else:
+            passmap = db.player_passmap(player,team,rival,mode,season)
+        if passmap == "Not valid":
+            st.warning("Player has not intervened in this match")
+        else:
+            st.pyplot(passmap)

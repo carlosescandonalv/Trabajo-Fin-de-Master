@@ -552,7 +552,8 @@ def pass_network(df,df_pass,team,opponent,minimum,color1,color2,team_img):
 
 
 
-##### PLAYERS INFO
+##### PLAYERS INFO 
+
 def search_players(team,season):
     conn = create_connection() 
     cursor = conn.cursor()
@@ -582,9 +583,9 @@ def player_heatmap(player,season):
     df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
     pitch = VerticalPitch(pitch_type='opta',half=False,
             pitch_color='#1B2632',stripe=False,line_color='#EEE9DF',
-            goal_type='box',linewidth=0.5,line_zorder=2,corner_arcs=True)
+            goal_type='box',linewidth=2,line_zorder=4,corner_arcs=True)
 
-    fig, ax = pitch.draw(figsize=(10, 8))
+    fig, axs = pitch.draw(figsize=(10, 8))
     # Create a custom color map that goes from yellow to red
     colors = [(1, 1, 0), (1, 0, 0)]  # (R, G, B) values: yellow (1, 1, 0) to red (1, 0, 0)
     cmap = LinearSegmentedColormap.from_list("YellowToRed", colors, N=256)
@@ -604,10 +605,115 @@ def player_heatmap(player,season):
                       )
 
     plt.arrow(105, 30,0 , 40, color='#EEE9DF', alpha=1.0,
-              zorder=1, head_width=3, head_length=3.5, linewidth=3, length_includes_head=True)
-    plt.xlim(-5,110)
-    plt.ylim(-10,110)
-    plt.title(f"{player} heatmap",size=20,y=0.95,fontweight='bold',color= '#EEE9DF',fontfamily="Liberation Sans Narrow")
+              zorder=1, head_width=3, head_length=3.5, linewidth=3,
+              length_includes_head=True)
+    plt.xlim([-5,110])
+    plt.ylim([-10,100])
+    plt.title(f"{player} heatmap",loc='center',y=1.03,
+              fontweight='bold',color= '#EEE9DF')
     fig.set_facecolor('#1B2632')
+    axs.set_facecolor('#1B2632')
+    return fig
 
+def player_passing_zones(player,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT match_event.*, players.name AS player_name
+    FROM match_event
+    JOIN matches ON match_event.match_id = matches.match_id
+    JOIN players ON match_event.player_id = players.player_id
+    WHERE players.name = '{player}' AND matches.season = '{season}'
+    """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df_pass = df[(df['type']=='Pass') & (df['player_name'] == player) ]
+    data_player = df_pass
+    pitch = VerticalPitch(pitch_color='#1B2632', line_color='#EEE9DF', line_zorder=2,
+                        pitch_type='opta',
+                        linewidth=2,goal_type='box')
+
+    fig, axs = pitch.draw(figsize=(10, 8))
+
+    colors = ['#1B2632', '#8FBC8F', '#00FF00']
+    cmap = LinearSegmentedColormap.from_list("DarkToBrightGreen", colors, N=256)
+
+    hexmap = pitch.hexbin(data_player.x, data_player.y, ax=axs, edgecolors='#1B2632',
+                        gridsize=(10, 10), cmap=cmap)
+    fig.set_facecolor('#1B2632')
+    axs.set_facecolor('#1B2632')
+
+    plt.arrow(105,30 , 0, 40, color='#EEE9DF', alpha=1.0,
+            zorder=1, head_width=3, head_length=3.5, 
+            linewidth=3, length_includes_head=True)
+    plt.title(f'Most frequent pass zones {player}',loc='center', y = 1.03,
+               fontweight='bold',color='#EEE9DF')
+
+    plt.xlim([-5, 110])
+    plt.ylim([-10, 100])
+    plt.gca().invert_xaxis()
+    return fig
+
+def player_passmap(player,home,opponent,mode,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+    SELECT match_event.*, players.name AS player_name
+    FROM match_event
+    JOIN matches ON match_event.match_id = matches.match_id
+    JOIN players ON match_event.player_id = players.player_id
+    WHERE matches.home = '{home}' AND matches.away = '{opponent}'  AND matches.season ='{season}'
+    AND players.name ='{player}'
+    """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df_pass = df[(df['type']=='Pass') & (df['player_name'] == player) ]
+    if len(df)==0:
+        return "Not valid"
+    else:
+        goal_indices = df[df['type'] == 'Goal'].index
+        assist_indexes = []
+        for goal_index in goal_indices:
+            for i in range(goal_index, -1, -1):
+                if df.at[i, 'type'] == 'Pass':
+                    assist_indexes.append(i)
+                    break
+        count=0
+        data_player = df_pass
+        pitch = VerticalPitch(pitch_color='#1B2632', line_color='#EEE9DF', pitch_type='opta',linewidth=0.5,goal_type='box')
+
+        fig, axs = pitch.draw(figsize=(10, 8))
+        fig.set_facecolor('#1B2632')
+        axs.set_facecolor('#1B2632')
+        plt.arrow(105,30 , 0, 40, color='#EEE9DF', alpha=1.0,
+                zorder=1, head_width=3, head_length=3.5, linewidth=3, length_includes_head=True)
+        plt.xlim([-5, 110])
+        plt.ylim([-10, 100])
+        plt.gca().invert_xaxis()
+        if mode == "Away":
+            plt.title(f'Pass map {player} vs {home} ',loc='center', fontweight='bold',color='#EEE9DF')
+        else:
+            plt.title(f'Pass map {player} vs {opponent} ',loc='center', fontweight='bold',color='#EEE9DF')
+        count_s = 0
+        total = len(data_player)
+        for index, row in data_player.iterrows():
+            if row['outcome'] == 'Successful':
+                count_s += 1
+                color_choice = "#0AFF3B"
+                alpha_choice = 0.8
+                if index in assist_indexes:
+                    color_choice= "yellow"   # Is Assist
+                    alpha_choice = 1
+                plt.plot(row['y'], row['x'], 'o',color=color_choice,markersize=2)
+                plt.arrow(row['y'], row['x'], row['end_y'] - row['y'], row['end_x'] - row['x'],
+                        color=color_choice, alpha= alpha_choice, zorder=1,
+                        head_width=0.8, head_length=1, linewidth=1.2, length_includes_head=True)
+            elif row['outcome'] == 'Unsuccessful':
+                    plt.arrow(row['y'], row['x'], row['end_y'] - row['y'], row['end_x'] - row['x'],
+                        color='red', alpha=0.5, zorder=1,
+                        head_width=0.8, head_length=1, linewidth=1.2, length_includes_head=True)
+        percentage=(count_s/total)*100
+        legend_labels = [f'Totals: {count_s}/{total}  ({percentage:.1f}%)']
+        plt.legend(legend_labels,bbox_to_anchor=(0.95, 0.09), loc='lower right',handlelength=0, handleheight=0)
+        
     return fig
