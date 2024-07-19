@@ -8,12 +8,12 @@ st.set_page_config(page_title='La Liga Performance', page_icon=':soccer')
 st.title("Database Access")
 seasons = db.season_list()
 season = st.selectbox("Select Season",seasons)
-col1, col2 = st.columns([0.3,0.7])
+col1, col2 = st.columns([0.45,0.6])
 with col1:
     table_df = db.table_extraction(season)
     
     table_ind = table_df.rename(columns={'team':'Team','matches_won': 'W', 'matches_drawn': 'D','matches_lost': 'L',
-                              'goals_scored': 'G','goals_received': 'GA',
+                              'goals_scored': 'G','goals_received': 'GA','clean_sheets': 'CS',
                               'points': 'Pts'})
    
     table_ind = table_ind.sort_values(by='Pts', ascending=False).reset_index(drop=True)
@@ -98,14 +98,15 @@ if team:
 
 
     # Section passes and goals development
-    col1,col2,col3,col4 =st.columns([0.3,0.2,0.2,0.3],vertical_alignment='center')
-    goals_fig,goals_scored,goals_conceded = db.goals_development(team,season)
+    col1,col2,col3,col4 =st.columns([0.2,0.3,0.3,0.3],vertical_alignment='center')
+    goals_fig,goals_scored,goals_conceded,clean_sheets = db.goals_development(team,season)
 
     with col2:
-        st.metric("Goals scored",goals_scored)
+        st.metric("Goals Scored",goals_scored)
     with col3:
-        st.metric("Goals conceded",goals_conceded)
-
+        st.metric("Goals Conceded",goals_conceded)
+    with col4:
+        st.metric("Clean Sheets",clean_sheets)
     col1, col2 = st.columns([0.5,0.5])
     with col1:
         st.plotly_chart(goals_fig)

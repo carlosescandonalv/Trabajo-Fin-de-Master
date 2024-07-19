@@ -69,7 +69,8 @@ def table_extraction(season):    # Classification Dataframe extraction (W,D,L, P
             'matches_drawn': 0,
             'matches_lost': 0,
             'goals_scored': 0,
-            'goals_received': 0
+            'goals_received': 0,
+            'clean_sheets':0
         }
     # Update the team statistics based on match outcomes
     for index, row in df.iterrows():
@@ -87,7 +88,11 @@ def table_extraction(season):    # Classification Dataframe extraction (W,D,L, P
         team_stats[home_team]['goals_received'] += goals_a
         team_stats[away_team]['goals_scored'] += goals_a
         team_stats[away_team]['goals_received'] += goals_h
-        
+        if goals_h == 0:
+            team_stats[away_team]['clean_sheets']+=1
+        if goals_a == 0:
+            team_stats[home_team]['clean_sheets']+=1
+
         if goals_h > goals_a:
             team_stats[home_team]['matches_won'] += 1
             team_stats[away_team]['matches_lost'] += 1
@@ -299,6 +304,7 @@ def goals_development(team,season):   # Goals development plot for a spcefic tea
     df = df.sort_values('match_date')
     goals_scored = int(df['goals_scored'].sum())
     goals_conceded = int(df['goals_conceded'].sum())
+    clean_sheets = int((df['goals_conceded']==0).sum())
     # Create the Plotly line chart
     fig = go.Figure()
 
@@ -341,7 +347,7 @@ def goals_development(team,season):   # Goals development plot for a spcefic tea
         )
     )
 
-    return fig,goals_scored,goals_conceded
+    return fig,goals_scored,goals_conceded,clean_sheets
 
 def determine_outcome(row, variable_team):
         if row['home_team'] == variable_team:
