@@ -124,6 +124,152 @@ def color_rows(row):    # Color the rows of the team classification table
     elif row.name >17:
         return ['background-color: #D37773']*len(row)
 
+def get_shot_form(qualifiers):
+    for item in qualifiers:
+        if 'type' in item and 'displayName' in item['type']:
+            display_name = item['type']['displayName']
+            if display_name in ['Head', 'RightFoot', 'LeftFoot','OtherBodyPart']:
+                return display_name
+    return None
+
+def goalscorer_table(season):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT
+            me.*,
+            p.name
+       FROM
+            match_event me
+       JOIN
+            players p ON me.player_id = p.player_id
+       JOIN    
+            matches m ON me.match_id = m.match_id
+       WHERE
+            me.is_shot = True AND m.season = '{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df['shot_form'] = df['qualifiers'].apply(get_shot_form)
+    goals_df = df.loc[df['type']=='Goal']
+    total_shots = df.groupby(['player_id', 'name']).size().reset_index(name='total_shots')
+    goals = df[df['type']=='Goal'].groupby(['player_id']).size().reset_index(name='goals')
+    left_goals=  goals_df[goals_df['shot_form'] == 'LeftFoot'].groupby(['player_id']).size().reset_index(name='LeftFoot_goals')
+    right_goals=  goals_df[goals_df['shot_form'] == 'RightFoot'].groupby(['player_id']).size().reset_index(name='RightFoot_goals')
+    head_goals=  goals_df[goals_df['shot_form'] == 'Head'].groupby(['player_id']).size().reset_index(name='Header_goals')
+    other_goals=  goals_df[goals_df['shot_form'] == 'OtherBodyPart'].groupby(['player_id']).size().reset_index(name='OtherBodyPart_goals')
+    merged_counts = pd.merge(total_shots, goals, on='player_id', how='left').merge(left_goals,on='player_id',how='left').merge(right_goals,on='player_id',how='left').merge(head_goals,on='player_id',how='left').merge(other_goals,on='player_id',how='left')
+    merged_counts.fillna(0, inplace=True)
+    top_10_players = merged_counts.sort_values(by='total_shots', ascending=False).head(50)
+    top_10_players_sorted = top_10_players.sort_values(by='goals', ascending=False)
+    top_10_players_sorted['LeftFoot_goals'] = top_10_players_sorted['LeftFoot_goals'].astype(int)
+    top_10_players_sorted['RightFoot_goals'] = top_10_players_sorted['RightFoot_goals'].astype(int)
+    top_10_players_sorted['Header_goals'] = top_10_players_sorted['Header_goals'].astype(int)
+    top_10_players_sorted['Other'] = top_10_players_sorted['OtherBodyPart_goals'].astype(int)
+
+    top_10_players_sorted = top_10_players_sorted.head(15)
+    top_10_players_sorted = top_10_players_sorted.sort_values(by='goals', ascending=True)
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    img_path = 'imgs_app/laligalogo2.png'
+    img = plt.imread(img_path)
+    imagebox = OffsetImage(img, zoom=0.04)
+    ab = AnnotationBbox(imagebox, (1, 1), frameon=False, xycoords='axes fraction', boxcoords="axes fraction", pad=0)
+    ax.add_artist(ab)
+
+    bar_width = 0.7
+    bar_left = ax.barh(top_10_players_sorted['name'], top_10_players_sorted['LeftFoot_goals'], bar_width, label='Left Foot Goals',color="#59A0A9")
+    bar_right = ax.barh(top_10_players_sorted['name'], top_10_players_sorted['RightFoot_goals'], bar_width, left=top_10_players_sorted['LeftFoot_goals'], label='Right Foot Goals',color="#5B59A9")
+    bar_head = ax.barh(top_10_players_sorted['name'], top_10_players_sorted['Header_goals'], bar_width, left=top_10_players_sorted['RightFoot_goals']+top_10_players_sorted['LeftFoot_goals'], label='Header Goals',color="#FFFCEE",alpha=0.75)
+    bar_other= ax.barh(top_10_players_sorted['name'], top_10_players_sorted['Other'], bar_width, left=top_10_players_sorted['RightFoot_goals']+top_10_players_sorted['LeftFoot_goals']+top_10_players_sorted['Header_goals'], label='Other Goals',color="orange",alpha=0.75)
+
+    fig.set_facecolor('#290028')
+    ax.set_facecolor('#290028')
+
+    ax.set_xlabel('Goals Scored',fontsize=12,color='white')
+    ax.legend(fontsize=12,borderpad=0.7)
+
+    for player, goals_left, goals_right, goals_head,goals_other in zip(top_10_players_sorted['name'], top_10_players_sorted['LeftFoot_goals'], top_10_players_sorted['RightFoot_goals'], top_10_players_sorted['Header_goals'],top_10_players_sorted['Other']):
+        if goals_left != 0:
+            ax.text(goals_left / 2, player, str(goals_left), ha='center', va='center', color='white', fontweight='bold')
+        if goals_right != 0:
+            ax.text(goals_left + goals_right / 2, player, str(goals_right), ha='center', va='center', color='white', fontweight='bold')
+        if goals_head != 0:
+            ax.text(goals_left + goals_right + goals_head / 2, player, str(goals_head), ha='center', va='center', color='white', fontweight='bold')
+        if goals_other != 0:
+            ax.text(goals_left + goals_right + goals_head + goals_other/ 2, player, str(goals_other), ha='center', va='center', color='white', fontweight='bold')
+
+    ax.set_title('Goal Scorers tendencies',fontweight='bold',fontsize=16,color='white',y=0.99)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+
+    ax.set_yticklabels(top_10_players_sorted['name'], fontsize=12,color='white')
+    ax.set_xticklabels(ax.get_xticks(), fontsize=12, fontweight='bold',color='white')
+    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: int(x)))
+
+    ax.tick_params(axis='both', which='both', length=0)
+
+    return fig
+
+
+### TEAM overview
+def possession_zones(team,season):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        SELECT * FROM match_event
+        JOIN teams ON match_event.team_id = teams.team_id
+        JOIN matches ON match_event.match_id = matches.match_id
+        WHERE teams.name = '{team}' AND type = 'BallTouch' AND matches.season ='{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    pitch = VerticalPitch(pitch_type='opta', line_zorder=2,
+              pitch_color='white', line_color='black',linewidth=1)
+
+    fig, ax = pitch.draw(figsize=(8, 6))
+    fig.set_facecolor('white')
+    plt.gca().invert_xaxis()
+    bin_statistic = pitch.bin_statistic(df.x, df.y, statistic='count', bins=(10, 4),normalize=True)
+    bin_statistic['statistic'] = gaussian_filter(bin_statistic['statistic'], 1)
+    pcm = pitch.heatmap(bin_statistic, ax=ax, cmap='Reds', edgecolors='white')
+    plt.title(f'Team possession zones',loc='center', fontweight='bold')
+
+    labels = pitch.label_heatmap(bin_statistic, color='black', fontsize=8,
+                                ax=ax, ha='center', va='center',
+                                str_format='{:.0%}',exclude_zeros=True)
+    return fig
+
+def passing_flow(team,season):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT match_event.*, teams.name AS team_name,matches.match_date AS match_date, 
+       matches.home AS home_team, matches.away AS away_team, matches.goals_h AS goals_home, matches.goals_a AS goals_away
+       FROM match_event
+       JOIN teams ON match_event.team_id = teams.team_id
+       JOIN matches ON match_event.match_id = matches.match_id
+       WHERE teams.name = '{team}' AND type = 'Pass'AND matches.season = '{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    pitch = VerticalPitch(pitch_type='opta', line_zorder=2,
+              pitch_color='white', line_color='black',linewidth=1)
+    bins = (6, 4)
+    fig, ax = pitch.draw(figsize=(8, 6))
+    fig.set_facecolor('white')
+    plt.gca().invert_xaxis()
+    bs_heatmap = pitch.bin_statistic(df.x, df.y, statistic='count', bins=bins)
+    hm = pitch.heatmap(bs_heatmap, ax=ax, cmap='Blues')
+    fm = pitch.flow(df.x, df.y, df.end_x, df.end_y,
+                    color='black', arrow_type='same',
+                    arrow_length=5, bins=bins, ax=ax)
+    ax_title = ax.set_title(f'{team} pass flow season 23/24',pad=-20,color="black",fontweight='bold')
+
+    return fig
 
 
 def goals_development(team,season):   # Goals development plot for a spcefic team
@@ -185,7 +331,14 @@ def goals_development(team,season):   # Goals development plot for a spcefic tea
         xaxis_title='Match Date',
         yaxis_title='Goals',
         hovermode='x unified',
-        plot_bgcolor = 'white'
+        plot_bgcolor = 'white', 
+        legend=dict(
+            orientation='h',
+            yanchor='bottom',
+            y=1.02,
+            xanchor='center',
+            x=0.5
+        )
     )
 
     return fig,goals_scored,goals_conceded
@@ -435,6 +588,8 @@ def pass_network(df,df_pass,team,opponent,minimum,color1,color2,team_img):
   subs1 = subs1[subs1['type']=='SubstitutionOff']
   firstSub = subs1['minute']
   firstSub=firstSub.min()
+  if firstSub<30:
+      firstSub =45
   succesful = df[df['minute']<firstSub]
   average_locations = succesful.groupby('passer').agg({'x':['mean'],'y':['mean','count']})
 

@@ -24,6 +24,10 @@ with col2:
     points_dev = db.table_plot(table_df)
     st.plotly_chart(points_dev)
 
+goalscorers_table = db.goalscorer_table(season)
+st.pyplot(goalscorers_table)
+
+st.divider()
 # Matches
 st.subheader("Match overview")
 col1, col2 = st.columns([0.5,0.5])
@@ -50,7 +54,7 @@ if home and away:
             match_network = db.pass_network(pass_data_away,df_pass,away,home,5,a1,a2,away_img)
             st.pyplot(match_network)
 
-
+st.divider()
 st.subheader("Team overview")
 teams_list = db.team_list(season)
 
@@ -70,7 +74,7 @@ if team:
         xi_df, full_squad = db.get_xi(df)
         full_squad.rename(columns={'player_name':'Name','player_number': 'ShirtN', 'total_minutes_played': 'Minutes'}, inplace=True)
         full_squad.set_index('Name', inplace=True)
-        st.dataframe(full_squad,height=320,width=400)
+        st.dataframe(full_squad,height=335,width=400)
     with col3:
         df_pass = df[(df['type'].isin(['Pass','BallTouch'])) & (df['outcome'] == 'Successful')]
         average_locations = df_pass.groupby('player_name').agg({'x':['mean'],'y':['mean']})
@@ -84,7 +88,13 @@ if team:
         initial_xi =db.draw_initial_xi(xi_df,team,c1,c2)
         st.pyplot(initial_xi)
 
-
+    col1,col2,col3,col4 = st.columns([0.1,0.4,0.4,0.1])
+    with col2:
+        pos_zones= db.possession_zones(team,season)
+        st.pyplot(pos_zones)
+    with col3:
+        pass_flow = db.passing_flow(team,season)
+        st.pyplot(pass_flow)
 
 
     # Section passes and goals development
@@ -96,12 +106,12 @@ if team:
     with col3:
         st.metric("Goals conceded",goals_conceded)
 
-    st.plotly_chart(goals_fig)
-
-
-
-    points_fig = db.pass_development(team,season)
-    st.plotly_chart(points_fig)
+    col1, col2 = st.columns([0.5,0.5])
+    with col1:
+        st.plotly_chart(goals_fig)
+    with col2:
+        points_fig = db.pass_development(team,season)
+        st.plotly_chart(points_fig)
 
     st.subheader("Player overview")
     player_names = db.search_players(team,season)
@@ -118,7 +128,7 @@ if team:
     st.divider()
 
 
-    
+
     teams_list.remove(team)
     rival = st.selectbox(f"Select a rival to plot {player} pass map:",teams_list)
     mode = st.radio("Choose one: ",["Home","Away"])# Home or away
