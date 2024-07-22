@@ -548,7 +548,6 @@ def draw_initial_xi(xi_df,team,c1,c2):
     return fig
 
 ##### MATCHES
-
 def match_info(home,away,season):
     conn = create_connection()
     cursor = conn.cursor()
@@ -814,6 +813,69 @@ def player_passing_zones(player,season):
     plt.ylim([-10, 100])
     plt.gca().invert_xaxis()
     return fig
+
+def player_shotmap(player,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT match_event.*,players.name FROM match_event
+          LEFT JOIN players ON match_event.player_id = players.player_id
+          JOIN matches ON match_event.match_id = matches.match_id
+          WHERE players.name = '{player}' AND match_event.is_shot = True
+          AND matches.season = '{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    pitch = VerticalPitch(pitch_type='opta', line_zorder=2, linewidth=0.5,
+              pitch_color='#1B2632', line_color='#EEE9DF',half=True,goal_type= 'box',pad_bottom=-20)
+
+    count_g=0
+    fig, ax = pitch.draw(figsize=(6.6, 5))
+
+    fig.set_facecolor('#1B2632')
+    ax.set_facecolor('#1B2632')
+    def make_html(fontname):
+        return "<p>{font}: <span style='font-family:{font}; font-size: 24px;'>{font}</p>".format(font=fontname)
+
+    code = "\n".join([make_html(font) for font in sorted(set([f.name for f in matplotlib.font_manager.fontManager.ttflist]))])
+
+    fm_rubik = FontManager('https://raw.githubusercontent.com/google/fonts/main/ofl/montserratalternates/MontserratAlternates-SemiBold.ttf' )
+
+    for index,row in df.iterrows():
+        color_choice = 'red'
+        size_c = 50
+        alpha_c = 0.5
+        edge_c = 'none'
+        if row['type'] == 'Goal':
+            count_g+=1
+            color_choice = '#32CD32'
+            size_c= 80
+            alpha_c = 0.9
+            edge_c = 'black'
+            plt.plot([row['y'], row['goal_mouth_y']], [row['x'],100], color='#EEE9DF', linestyle='--', linewidth=0.3, zorder=1)
+
+        plt.scatter(row['y'],row['x'],color = color_choice,s=size_c,edgecolor=edge_c,linewidth=1,alpha=alpha_c)
+
+    plt.title(f'{player} Shot-map {season} ',loc='center', fontweight='bold',c='#EEE9DF')
+    plt.text(90, 65,f'{len(df)}', fontsize=25, ha='left', va='center',fontproperties=fm_rubik.prop,c='#EEE9DF')
+    plt.text(80, 65,f'Shots ', fontsize=18, ha='left', va='center',fontfamily="Liberation Sans Narrow",c='#EEE9DF')
+    plt.text(65, 65,f'{count_g}', fontsize=25, ha='left', va='center',fontproperties=fm_rubik.prop,c='#EEE9DF')
+    plt.text(55, 65,f'Goals ', fontsize=18, ha='left', va='center',fontfamily="Liberation Sans Narrow",c='#EEE9DF')
+    percentage = (count_g / len(df)) * 100
+    formatted_percentage = f'{percentage:.1f}%' 
+    plt.text(40, 65,f'{formatted_percentage}', fontsize=25, ha='left', va='center',fontproperties=fm_rubik.prop,c='#EEE9DF')
+    plt.text(22, 65,f'Accuracy ', fontsize=18, ha='left', va='center',fontfamily="Liberation Sans Narrow",c='#EEE9DF')
+
+    # Get goal parts
+    df['shot_form'] = df['qualifiers'].apply(get_shot_form)
+    goals_df = df.loc[df['type'] == 'Goal']
+    shot_form_counts = goals_df['shot_form'].value_counts()
+    count_head = shot_form_counts.get('Head', 0)
+    count_left_foot = shot_form_counts.get('LeftFoot', 0)
+    count_right_foot = shot_form_counts.get('RightFoot', 0)
+
+    return fig, count_head, count_left_foot, count_right_foot
+
 
 def player_passmap(player,home,opponent,mode,season):
     conn = create_connection() 

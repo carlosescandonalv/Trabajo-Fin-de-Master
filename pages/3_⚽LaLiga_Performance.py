@@ -126,19 +126,26 @@ if team:
         with col2:
             pass_zones = db.player_passing_zones(player,season)
             st.pyplot(pass_zones)
-    st.divider()
+        st.divider()
 
+        col1, col2 = st.columns([0.7,0.3])
+        with col1:
+            shotmap,head,leftfoot, rightfoot =db.player_shotmap(player,season)
+            st.pyplot(shotmap)
+        with col2:
+            st.metric("Right Foot",rightfoot)
+            st.metric("Left Foot",leftfoot)
+            st.metric("Headers",head)
 
-
-    teams_list.remove(team)
-    rival = st.selectbox(f"Select a rival to plot {player} pass map:",teams_list)
-    mode = st.radio("Choose one: ",["Home","Away"])# Home or away
-    if rival and mode:
-        if mode == "Away": 
-            passmap = db.player_passmap(player,rival,team,mode,season)
-        else:
-            passmap = db.player_passmap(player,team,rival,mode,season)
-        if passmap == "Not valid":
-            st.warning("Player has not intervened in this match")
-        else:
-            st.pyplot(passmap)
+        teams_list.remove(team)
+        rival = st.selectbox(f"Select a rival to plot {player} pass map:",teams_list)
+        mode = st.radio("Choose one: ",["Home","Away"])# Home or away
+        if rival and mode:
+            if mode == "Away": 
+                passmap = db.player_passmap(player,rival,team,mode,season)
+            else:
+                passmap = db.player_passmap(player,team,rival,mode,season)
+            if passmap == "Not valid":
+                st.warning("Player has not intervened in this match")
+            else:
+                st.pyplot(passmap)
