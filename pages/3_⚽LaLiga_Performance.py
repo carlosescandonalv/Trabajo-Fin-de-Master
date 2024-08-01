@@ -1,5 +1,6 @@
 import streamlit as st
 import database_access as db
+import database_access_match_report as db2
 from streamlit_extras.add_vertical_space import add_vertical_space
 
 
@@ -54,6 +55,8 @@ if home and away:
             match_network = db.pass_network(pass_data_away,df_pass,away,home,5,a1,a2,away_img)
             st.pyplot(match_network)
 
+        match_report = db2.match_report(home,away,season,home_img,away_img,h1,a1)
+        st.pyplot(match_report)
 st.divider()
 st.subheader("Team overview")
 teams_list = db.team_list(season)
