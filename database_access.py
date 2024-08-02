@@ -218,11 +218,66 @@ def goalscorer_table(season):
 
     return fig
 
+def penalties_season(season):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT
+            me.*,p.name,m.home,m.away
+       FROM
+            match_event me
+       JOIN
+            players p ON me.player_id = p.player_id
+       JOIN
+            matches m ON me.match_id = m.match_id
+       WHERE
+            me.is_shot = True AND m.season = '{season}';
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    is_penalty = lambda x: any(qualifier.get('type', {}).get('displayName') == 'Penalty' for qualifier in x)
+    df['is_penalty'] = df['qualifiers'].apply(is_penalty)
+    penalty_rows = df[df['is_penalty']]
+    df = df.loc[df['is_penalty'] == True]
+    df['goal_mouth_z'] = (df['goal_mouth_z']*2.4)/39.6
+    df['goal_mouth_y'] = ((df['goal_mouth_y'] - 45) / (55 - 45)) * (7.2 - 0) + 0
+    # Load the image
+    image_path = 'imgs_app/porteria.png'
+    image = plt.imread(image_path)
+
+    x_min, x_max, y_min, y_max = 0, 7.5, 0, 2.45
+    fig, ax = plt.subplots(figsize=(32,6))
+
+    aspect_ratio = (x_max - x_min) / (y_max - y_min)
+    ax.imshow(image, extent=(x_min, x_max, y_min, y_max), aspect=aspect_ratio, alpha=0.8)
+
+
+    plt.gca().invert_xaxis()
+    for index,row in df.iterrows():
+        color_shot = 'red'
+        alpha=0.6
+        if row['type'] =='Goal':
+            color_shot = '#53FF45'
+            alpha_c=0.8
+        ax.scatter(row['goal_mouth_y'], row['goal_mouth_z'], marker='o', color=color_shot,s=250, label='Goals',alpha=alpha_c,edgecolor='black')
+
+    ax.set_xlim(10, -3)
+    ax.set_ylim(-0.2, 4)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_aspect('equal')
+
+    return fig, df
+
 
 ### TEAM overview
 def possession_zones(team,season):
     conn = create_connection()
-    cursor = conn.cursor()
     cursor = conn.cursor()
     cursor.execute(f"""
         SELECT * FROM match_event
@@ -876,7 +931,128 @@ def player_shotmap(player,season):
 
     return fig, count_head, count_left_foot, count_right_foot
 
+def passing_threat(player,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT match_event.*,players.name FROM match_event
+          LEFT JOIN players ON match_event.player_id = players.player_id
+          JOIN matches ON match_event.match_id = matches.match_id
+          WHERE players.name = '{player}' AND match_event.type = 'Pass'
+          AND matches.season = '{season}'
+        """)
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df = df.loc[(df['type']=='Pass') & (df['outcome']=='Successful')].reset_index()
+    xT = pd.read_csv("imgs_app/xT_Grid.csv")
+    xT = np.array(xT)
+    xT_rows, xT_cols = xT.shape
+    df_pass = df
+    df_pass['x1_bin'] = pd.cut(df_pass['x'], bins=xT_cols, labels=False)
+    df_pass['y1_bin'] = pd.cut(df_pass['y'], bins=xT_rows, labels=False)
+    df_pass['x2_bin'] = pd.cut(df_pass['end_x'], bins=xT_cols, labels=False)
+    df_pass['y2_bin'] = pd.cut(df_pass['end_y'], bins=xT_rows, labels=False)
+    df_pass['start_zone_value'] = df_pass[['x1_bin', 'y1_bin']].apply(lambda x: xT[x[1]][x[0]], axis=1)
+    df_pass['end_zone_value'] = df_pass[['x2_bin', 'y2_bin']].apply(lambda x: xT[x[1]][x[0]], axis=1)
+    df_pass['xT'] = df_pass['end_zone_value'] - df_pass['start_zone_value']
+    df_pass = df_pass.sort_values(by='xT',ascending=False)
+    count=0
 
+    pitch = Pitch(pitch_color='#1B2632', line_color='#EEE9DF', pitch_type='opta',goal_type='box',linewidth=0.5)
+    fig, axs = pitch.draw(figsize=(8, 6))
+    plt.arrow(30,-5 , 40, 0, color='#EEE9DF', alpha=1.0,
+            zorder=1, head_width=3, head_length=3.5, linewidth=3, length_includes_head=True)
+    plt.xlim([-5, 110])
+    plt.ylim([-10, 100])
+
+    plt.title(f'Passing Threat {player} | {season} ',loc='center', fontweight='bold',fontsize=16,color="#EEE9DF")
+    count_s = 0
+    df_pass_filtered= df_pass.head(10)
+    fig.set_facecolor('#1B2632')
+    for index, row in df_pass_filtered.iterrows():
+        count_s += 1
+        color_choice = "#EEE9DF"
+        plt.plot(row['x'], row['y'], 'o',color=color_choice,markersize=6)
+        lc2 = lines(row['x'], row['y'], row['end_x'], row['end_y'], cmap='winter',
+                    comet=True, transparent=True,
+                    linewidth=8,
+                    alpha_start=0.5, alpha_end=0.6, ax=axs)
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    df = df.loc[(df['type']=='Pass') & (df['outcome']=='Successful')].reset_index()
+    df.x = df.x*1.2
+    df.y = df.y*.8
+    df.end_x = df.end_x*1.2
+    df.end_y = df.end_y*0.8
+
+    df['beginning'] = np.sqrt(np.square(120-df['x']) + np.square(40 - df['y']))
+    df['end'] = np.sqrt(np.square(120 - df['end_x']) + np.square(40 - df['end_y']))
+
+    df['progressive'] = [(df['end'][x]) / (df['beginning'][x]) < .75 for x in range(len(df.beginning))]
+
+    df.loc[df['progressive']==True].outcome
+    df.x = df.x/1.2
+    df.y = df.y/.8
+    df.end_x = df.end_x/1.2
+    df.end_y = df.end_y/0.8
+    data_player = df.loc[df['progressive']==True]    
+    for index, row in data_player.iterrows():
+        if row['id'] not in df_pass_filtered['id'].values:
+            if row['progressive'] == True:
+                count_s += 1
+                color_choice = "#E3AF64"
+                plt.plot(row['x'], row['y'], 'o',color=color_choice,markersize=1)
+                plt.arrow(row['x'], row['y'], row['end_x'] - row['x'], row['end_y'] - row['y'],
+                            color=color_choice, alpha=0.7, zorder=1,
+                            head_width=1, head_length=1, linewidth=0.9, length_includes_head=True)
+
+
+    plt.annotate('Hightest xT', xy=(0.83, 0.03), xycoords='axes fraction', ha='right', fontsize=12,color="#EEE9DF")
+    plt.annotate('Progressive Passes', xy=(0.05, 0.03), xycoords='axes fraction', ha='left', fontsize=12,color='#E3AF64')
+    plt.arrow(2,-8 , 20, 0, color='#E3AF64', alpha=1.0,
+            zorder=1, head_width=1, head_length=1, linewidth=0.9, length_includes_head=True)
+    lines(91, -5, 100, -5, cmap='winter',comet=True, transparent=True,linewidth=8,alpha_start=0.5, alpha_end=0.6, ax=axs)
+
+    return fig
+
+def player_dribbles(player,season):
+    conn = create_connection() 
+    cursor = conn.cursor()
+    cursor.execute(f"""
+       SELECT match_event.*,players.name FROM match_event
+          LEFT JOIN players ON match_event.player_id = players.player_id
+          JOIN matches ON match_event.match_id = matches.match_id
+          WHERE players.name = '{player}' AND match_event.type = 'TakeOn'
+          AND matches.season = '{season}'
+        """)
+    records = cursor.fetchall()
+    takeons = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    
+    count=0
+    pitch = VerticalPitch(pitch_color='#1B2632',line_color='#EEE9DF', pitch_type='opta',linewidth=0.5,goal_type='box')
+    fig, axs = pitch.draw(figsize=(12, 6))
+    plt.arrow(-7, 30, 0, 40, color='white', alpha=1.0,
+            zorder=1, head_width=3, head_length=3.5, linewidth=3, length_includes_head=True)
+    plt.xlim([-10, 105])
+    plt.ylim([-5, 105])
+    plt.gca().invert_xaxis()
+    player = takeons["name"].unique()[0]
+    plt.title(f'{player} dribbles {season}',loc='center', fontweight='bold',c='#EEE9DF')
+    count_s = 0
+    total = len(takeons)
+    fig.set_facecolor('#1B2632')
+
+
+    for index, row in takeons.iterrows():
+        if row['outcome'] == 'Successful':
+            count_s += 1
+            plt.plot(row['y'], row['x'], 'o',color='#33FF9C',markersize=10,markeredgecolor="#00CC69",zorder=2)
+        if row['outcome'] == 'Unsuccessful':
+            plt.plot(row['y'], row['x'], 'o',color='#F40101',markersize=7,alpha=0.5,zorder=1)
+    percentage=(count_s/total)*100
+    legend_labels = [f'Totals: {count_s}/{total}  ({percentage:.1f}%)']
+    plt.legend(legend_labels,bbox_to_anchor=(0.92, 0.043), loc='lower right',handlelength=0, handleheight=0)
+
+    return fig
 def player_passmap(player,home,opponent,mode,season):
     conn = create_connection() 
     cursor = conn.cursor()
@@ -940,3 +1116,4 @@ def player_passmap(player,home,opponent,mode,season):
         plt.legend(legend_labels,bbox_to_anchor=(0.95, 0.09), loc='lower right',handlelength=0, handleheight=0)
         
     return fig
+

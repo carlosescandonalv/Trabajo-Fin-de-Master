@@ -28,6 +28,8 @@ with col2:
 goalscorers_table = db.goalscorer_table(season)
 st.pyplot(goalscorers_table)
 
+penalties_plot, pen_stats = db.penalties_season(season)
+st.pyplot(penalties_plot)
 st.divider()
 # Matches
 st.subheader("Match overview")
@@ -116,7 +118,8 @@ if team:
     with col2:
         points_fig = db.pass_development(team,season)
         st.plotly_chart(points_fig)
-
+    
+    st.divider()
     st.subheader("Player overview")
     player_names = db.search_players(team,season)
     player_names.insert(0,"")
@@ -131,6 +134,7 @@ if team:
             st.pyplot(pass_zones)
         st.divider()
 
+        st.subheader("Offensive Contribution")
         col1, col2 = st.columns([0.7,0.3])
         with col1:
             shotmap,head,leftfoot, rightfoot =db.player_shotmap(player,season)
@@ -140,6 +144,13 @@ if team:
             st.metric("Left Foot",leftfoot)
             st.metric("Headers",head)
 
+        pass_threat = db.passing_threat(player,season)
+        dribbles = db.player_dribbles(player,season)
+        col1,col2 =st.columns([0.6,0.4])
+        with col1:
+            st.pyplot(pass_threat)
+        with col2:
+            st.pyplot(dribbles)
         teams_list.remove(team)
         rival = st.selectbox(f"Select a rival to plot {player} pass map:",teams_list)
         mode = st.radio("Choose one: ",["Home","Away"])# Home or away
