@@ -218,21 +218,36 @@ def goalscorer_table(season):
 
     return fig
 
-def penalties_season(season):
+def penalties_season(season,mode):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute(f"""
-       SELECT
-            me.*,p.name,m.home,m.away
-       FROM
-            match_event me
-       JOIN
-            players p ON me.player_id = p.player_id
-       JOIN
-            matches m ON me.match_id = m.match_id
-       WHERE
-            me.is_shot = True AND m.season = '{season}';
-        """)
+    if mode == "League General":
+        cursor.execute(f"""
+        SELECT
+                me.*,p.name,m.home,m.away
+        FROM
+                match_event me
+        JOIN
+                players p ON me.player_id = p.player_id
+        JOIN
+                matches m ON me.match_id = m.match_id
+        WHERE
+                me.is_shot = True AND m.season = '{season}';
+            """)
+    else: 
+        cursor.execute(f"""
+        SELECT
+                me.*,p.name,m.home,m.away, t.name
+        FROM
+                match_event me
+        JOIN
+                players p ON me.player_id = p.player_id
+        JOIN
+                matches m ON me.match_id = m.match_id
+        JOIN    teams t ON me.team_id = t.team_id               
+        WHERE
+                me.is_shot = True AND t.name = '{mode}' AND m.season = '{season}';
+            """)
     records = cursor.fetchall()
     df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
     is_penalty = lambda x: any(qualifier.get('type', {}).get('displayName') == 'Penalty' for qualifier in x)
@@ -255,7 +270,7 @@ def penalties_season(season):
     plt.gca().invert_xaxis()
     for index,row in df.iterrows():
         color_shot = 'red'
-        alpha=0.6
+        alpha_c=0.6
         if row['type'] =='Goal':
             color_shot = '#53FF45'
             alpha_c=0.8
@@ -273,6 +288,87 @@ def penalties_season(season):
     ax.set_aspect('equal')
 
     return fig, df
+
+
+def penaltis_stats(df):
+    goal_width = 7.32
+    goal_height = 2.44
+
+    # Create a new column to label each shot based on its width (left, mid, right)
+    df['width_zone'] = pd.cut(df['goal_mouth_y'], bins=[0, goal_width/3, 2*goal_width/3, goal_width], labels=['right', 'mid', 'left'])
+
+    # Create a new column to label each shot based on its height (top or bottom)
+    df['height_zone'] = pd.cut(df['goal_mouth_z'], bins=[0, goal_height/2, goal_height], labels=['bottom', 'top'])
+
+    # Create a combined shot zone column
+    df['shot_zone'] = df.apply(lambda row: f"{row['width_zone']}-{row['height_zone']}" if pd.notnull(row['width_zone']) and pd.notnull(row['height_zone']) else 'Out', axis=1)
+
+    # Print the percentage and number of shots for each area
+    shot_counts = df['shot_zone'].value_counts(normalize=True) * 100
+    shot_counts = shot_counts.sort_index()
+    print("Shot Zones:")
+    print(shot_counts)
+    print("\nNumber of Shots in Each Zone:")
+    print(df['shot_zone'].value_counts())
+    shot_counts = df['shot_zone'].value_counts(normalize=True) * 100
+    shot_counts = shot_counts.sort_index()
+    print("Shot Zones:")
+    print(shot_counts)
+    print("\nNumber of Shots in Each Zone:")
+    print(df['shot_zone'].value_counts())
+    # Shot zone count and Success Rate of each zone
+    a = df['shot_zone'].value_counts()
+    success_rate = df.groupby('shot_zone')['type'].apply(lambda x: (x == 'Goal').sum() / len(x) * 100 if len(x) > 0 else 0)
+    
+    #shot_counts = a.drop('Out')
+    #success_rates = success_rate.drop('Out')
+    if 'Out' in a.index:
+        shot_counts = a.drop('Out')
+    else:
+        shot_counts = a
+
+    if 'Out' in success_rate.index:
+        success_rates = success_rate.drop('Out')
+    else:
+        success_rates = success_rate
+    success_rates = success_rates.reindex(shot_counts.index)
+    zone_mapping = {
+        'left-top': (0, 0),
+        'mid-top': (0, 1),
+        'right-top': (0, 2),
+        'left-bottom': (1, 0),
+        'mid-bottom': (1, 1),
+        'right-bottom': (1, 2)
+    }
+    shot_matrix = [[0, 0, 0], [0, 0, 0]]
+    success_matrix = [[0, 0, 0], [0, 0, 0]]
+
+    for zone in shot_counts.index:
+        count = shot_counts[zone]
+        rate = success_rates[zone]
+        row, col = zone_mapping[zone]
+        shot_matrix[row][col] = count
+        success_matrix[row][col] = rate
+
+    shot_df = pd.DataFrame(shot_matrix, index=['Top', 'Bottom'], columns=['Left', 'Middle', 'Right'])
+    success_df = pd.DataFrame(success_matrix, index=['Top', 'Bottom'], columns=['Left', 'Middle', 'Right'])
+
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+    sns.heatmap(shot_df, annot=True, fmt='d', cmap='Blues', cbar=True, ax=ax[0])
+    ax[0].set_title('Number of Shots by Zone', fontsize=14)
+    ax[0].set_xlabel('')
+    ax[0].set_ylabel('')
+    ax[0].set_xticklabels(['Left', 'Middle', 'Right'], fontsize=12)
+    ax[0].set_yticklabels(['Top', 'Bottom'], fontsize=12, rotation=0)
+    sns.heatmap(success_df, annot=True, fmt='.1f', cmap='RdYlGn', cbar=True, ax=ax[1])
+    ax[1].set_title('Success Rate by Zone (%)', fontsize=14)
+    ax[1].set_xlabel('')
+    ax[1].set_ylabel('')
+    ax[1].set_xticklabels(['Left', 'Middle', 'Right'], fontsize=12)
+    ax[1].set_yticklabels(['Top', 'Bottom'], fontsize=12, rotation=0)
+    plt.tight_layout()
+    
+    return fig
 
 
 ### TEAM overview

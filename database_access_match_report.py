@@ -232,3 +232,62 @@ def match_report(home,away,season,home_img,away_img,color_home,color_away):
     ax.add_patch(rec14)
 
     return fig
+
+
+
+def penalties_player(player,season):
+    conn = db.create_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        SELECT
+                me.*,p.name,m.home,m.away
+        FROM
+                match_event me
+        JOIN
+                players p ON me.player_id = p.player_id
+        JOIN
+                matches m ON me.match_id = m.match_id
+        WHERE
+                me.is_shot = True AND p.name = '{player}' AND m.season = '{season}' ;
+            """)
+
+    records = cursor.fetchall()
+    df = pd.DataFrame(records, columns = [desc[0] for desc in cursor.description])
+    is_penalty = lambda x: any(qualifier.get('type', {}).get('displayName') == 'Penalty' for qualifier in x)
+    df['is_penalty'] = df['qualifiers'].apply(is_penalty)
+    penalty_rows = df[df['is_penalty']]
+    df = df.loc[df['is_penalty'] == True]
+    df['goal_mouth_z'] = (df['goal_mouth_z']*2.4)/39.6
+    df['goal_mouth_y'] = ((df['goal_mouth_y'] - 45) / (55 - 45)) * (7.2 - 0) + 0
+    # Load the image
+    image_path = 'imgs_app/porteria.png'
+    image = plt.imread(image_path)
+
+    x_min, x_max, y_min, y_max = 0, 7.5, 0, 2.45
+    fig, ax = plt.subplots(figsize=(32,6))
+
+    aspect_ratio = (x_max - x_min) / (y_max - y_min)
+    ax.imshow(image, extent=(x_min, x_max, y_min, y_max), aspect=aspect_ratio, alpha=0.8)
+
+
+    plt.gca().invert_xaxis()
+    for index,row in df.iterrows():
+        color_shot = 'red'
+        alpha_c=0.6
+        if row['type'] =='Goal':
+            color_shot = '#53FF45'
+            alpha_c=0.8
+        ax.scatter(row['goal_mouth_y'], row['goal_mouth_z'], marker='o', color=color_shot,s=250, label='Goals',alpha=alpha_c,edgecolor='black')
+
+    ax.set_xlim(10, -3)
+    ax.set_ylim(-0.2, 4)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_aspect('equal')
+
+    return fig

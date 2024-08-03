@@ -9,6 +9,8 @@ st.set_page_config(page_title='La Liga Performance', page_icon=':soccer')
 st.title("Database Access")
 seasons = db.season_list()
 season = st.selectbox("Select Season",seasons)
+
+st.subheader("Season Overview")
 col1, col2 = st.columns([0.45,0.6])
 with col1:
     table_df = db.table_extraction(season)
@@ -28,9 +30,15 @@ with col2:
 goalscorers_table = db.goalscorer_table(season)
 st.pyplot(goalscorers_table)
 
-penalties_plot, pen_stats = db.penalties_season(season)
+mode = db.team_list(season)
+mode.insert(0,"League General")
+select_mode = st.selectbox("Select Team",mode)
+penalties_plot, pen_stats = db.penalties_season(season,select_mode)
 st.pyplot(penalties_plot)
+penalty_stats = db.penaltis_stats(pen_stats)
+st.pyplot(penalty_stats)
 st.divider()
+
 # Matches
 st.subheader("Match overview")
 col1, col2 = st.columns([0.5,0.5])
@@ -149,6 +157,8 @@ if team:
         col1,col2 =st.columns([0.6,0.4])
         with col1:
             st.pyplot(pass_threat)
+            pen = db2.penalties_player(player,season)
+            st.pyplot(pen)
         with col2:
             st.pyplot(dribbles)
         teams_list.remove(team)
