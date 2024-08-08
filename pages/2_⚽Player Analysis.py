@@ -5,6 +5,7 @@ import pandas as pd
 import subprocess
 import os
 from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.stylable_container import stylable_container
 from streamlit_option_menu import option_menu
 from player_percentiles import percentile_plot, highlight_value
 from image_extraction import clear_directory, image_extraction, find_first_valid_image
@@ -24,6 +25,15 @@ import re
 
 st.title('Player Analysis')
 
+with st.expander("Information about the app"):
+    st.write("At the moment this platform comprises information for more than 3000 players from European Top 7 Leagues")
+    st.markdown("- :flag-es: La Liga")
+    st.markdown("- :uk: Premier League")
+    st.markdown("- :flag-ge: Bundesliga")
+    st.markdown("- :flag-it: Serie A")
+    st.markdown("- :fr: Ligue 1")
+    st.markdown("- :flag-pt: Primeira Liga")
+    st.markdown("- :flag-nl: Eredivisie")
 
 def load_data():
     csv_path = os.path.join('data', 'Big5Leagues_Players_Standard_Stats.csv')
@@ -44,6 +54,10 @@ player = st.selectbox("Search a player", players_list)
 if player:
     team = re.findall(r'\(.*?\)', player)[0].strip("()")
     player = player.split(" (")[0]
+    row = players_field[(players_field["player"]==player) & (players_field["team"]==team)]
+    if row["minutes_90s"].values[0]<1:
+        st.warning("This player has not played the required amount of minutes")
+        player = ""
 else:
     player = ""
 
@@ -65,30 +79,48 @@ with col2:
 
 add_vertical_space(2)
 
+####
+
 # Comprueba que se introduce nombre y el modo de la sesión
 if player and st.session_state.selected_mode:
-        col1,col2,col3 = st.columns([0.4,0.4,0.2],gap="small")
-        with col1:
-            image_extraction(f' {player} {team}')
-            pth = find_first_valid_image("images")
-            st.image(pth, width=200)
-        # Rating extraction
-        with col2: 
-            st.subheader(f"{player}",divider="gray")
-            position = (players[players['player']==player])['position'].values[0]
-            print(position)
-            st.write(f"Position: {position}")
-            nationality = (players[players['player']==player])['nationality'].values[0]
-            st.write(f"Nationality: {nationality}")
+        with stylable_container(key="container_with_border",
+            css_styles="""
+                {
+                    border: 1px solid rgba(49, 51, 63, 0.2);
+                    border-radius: 0.5rem;
+                    padding-top: 2%;
+                    padding-bottom:2%;
+                    background-color: lightgrey;
+                }
+            """,):
+            col1,col2,col3 = st.columns([0.4,0.4,0.2],gap="small")
+            with col1:
+                image_extraction(f' {player} {team}')
+                pth = find_first_valid_image("images")
+                with stylable_container(key="cont_img",
+                    css_styles="""
+                        {
+                            padding: calc(1em - 1px)
+                        }
+                    """,):
+                    st.image(pth, width=200)
+            # Rating extraction
+            with col2: 
+                st.subheader(f"{player}",divider="gray")
+                position = (players[players['player']==player])['position'].values[0]
+                print(position)
+                st.write(f"Position: {position}")
+                nationality = (players[players['player']==player])['nationality'].values[0]
+                st.write(f"Nationality: {nationality}")
+                
+                st.write(f"Team: {team}")
+            with col3: 
+                performance = generate_df()
+                rating = float(get_rating(performance,player,team))
+                rating = min(round(rating, 2), 10)
+                st.metric("Rating",rating)
             
-            st.write(f"Team: {team}")
-        with col3: 
-            performance = generate_df()
-            rating = float(get_rating(performance,player,team))
-            rating = min(round(rating, 2), 10)
-            st.metric("Rating",rating)
-        
-        
+            
         # Check player position
         age =  (players[players['player']==player])['age'].values[0]
         if position not in ['DF', 'MF', 'FW']:

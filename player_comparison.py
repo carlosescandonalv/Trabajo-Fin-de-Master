@@ -350,7 +350,7 @@ def defender_vs_mean(player,modo,team,match_th):
     pass_data0 = passing[(passing['player'] == player) & (passing['team'] == team)]
     defense_data0 =  defense[(defense['player'] == player) & (defense['team'] == team)]
     possession_data0 = possession[(possession['player'] == player) & (possession['team'] == team)]
-    miscellaneous_data0 = miscellaneous[(miscellaneous['player'] == player) & (miscellaneos['team'] == team)]
+    miscellaneous_data0 = miscellaneous[(miscellaneous['player'] == player) & (miscellaneous['team'] == team)]
     
     age = std_data0["age"].values[0]
     minutes_played0 = std_data0["minutes"].values[0]

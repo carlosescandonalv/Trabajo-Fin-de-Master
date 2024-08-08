@@ -52,7 +52,7 @@ with col2:
     
 if home and away:
     if home == away:
-        st.write("Home and Away team can't be equal")    
+        st.write("Home and Away team can't be the same")    
     else:
         home_img,h1,h2 = db.get_team_info(home)
         away_img,a1,a2 = db.get_team_info(away)
