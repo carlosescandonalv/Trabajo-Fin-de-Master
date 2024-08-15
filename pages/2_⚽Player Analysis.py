@@ -90,7 +90,8 @@ if player and st.session_state.selected_mode:
                     border-radius: 0.5rem;
                     padding-top: 2%;
                     padding-bottom:2%;
-                    background-color: lightgrey;
+                    background-color: #DADFF7;
+                    color:black;
                 }
             """,):
             col1,col2,col3 = st.columns([0.4,0.4,0.2],gap="small")
@@ -105,15 +106,15 @@ if player and st.session_state.selected_mode:
                     """,):
                     st.image(pth, width=200)
             # Rating extraction
-            with col2: 
+            with col2:
                 st.subheader(f"{player}",divider="gray")
                 position = (players[players['player']==player])['position'].values[0]
                 print(position)
-                st.write(f"Position: {position}")
+                st.write(f"Position: :blue[{position}]")
                 nationality = (players[players['player']==player])['nationality'].values[0]
-                st.write(f"Nationality: {nationality}")
+                st.write(f"Nationality: :blue[{nationality}]")
                 
-                st.write(f"Team: {team}")
+                st.write(f"Team: :blue[{team}]")
             with col3: 
                 performance = generate_df()
                 rating = float(get_rating(performance,player,team))
